@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+
+# Build files
+dist/
+build/
+
+# Vite cache
+.vite/
+
+# Logs
+*.log
+
+# Secret files
+serviceAccountKey.json
+firebase-admin.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
