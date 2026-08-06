@@ -789,27 +789,48 @@ app.delete(
 // ==================================================
 // Categories
 // ==================================================
-
 app.get("/categories", async (req, res) => {
   try {
-    const categories =
-      await categoriesCollection
-        .find({})
-        .toArray();
-
-    res.status(200).json(
-      categories
-    );
+    const books = await booksCollection.find({}).toArray();
+    const categoryMap = new Map();
+    books.forEach(book => {
+      const cat = book.category || 'অন্যান্য';
+      categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
+    });
+    const categories = Array.from(categoryMap, ([name, count]) => ({
+      name,
+      slug: name.toLowerCase().replace(/\s+/g, '-'),
+      count
+    }));
+    res.status(200).json(categories);
   } catch (error) {
     res.status(500).json({
       success: false,
-      message:
-        "Failed to get categories",
-      error:
-        error.message,
+      message: "Failed to get categories",
+      error: error.message
     });
   }
 });
+// app.get("/categories", async (req, res) => {
+//   try {
+//     const categories =
+//       await categoriesCollection
+//         .find({})
+//         .toArray();
+
+//     res.status(200).json(
+//       categories
+//     );
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message:
+//         "Failed to get categories",
+//       error:
+//         error.message,
+//     });
+//   }
+// });
 
 app.post(
   "/categories",
