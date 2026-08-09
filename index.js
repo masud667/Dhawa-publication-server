@@ -11,6 +11,7 @@ const { connectDB, getDB } = require("./config/db");
 const bookRoutes = require("./routes/bookRoutes");
 const homeRoutes = require("./routes/homeRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 
 const app = express();
@@ -84,7 +85,7 @@ const startServer = async () => {
     app.use("/home", homeRoutes);
 
     app.use("/categories", categoryRoutes);
-
+    app.use("/admin", adminRoutes);
 
 
     // ======================================

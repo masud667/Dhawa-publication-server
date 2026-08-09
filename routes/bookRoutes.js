@@ -113,6 +113,7 @@ router.patch("/:id", async (req, res) => {
     try {
         const { id } = req.params;
 
+        // Validate MongoDB ID
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({
                 success: false,
@@ -122,15 +123,54 @@ router.patch("/:id", async (req, res) => {
 
         const db = getDB();
 
+        // Copy request body
+        const updateData = { ...req.body };
+
+        // VERY IMPORTANT:
+        // Never update MongoDB _id
+        delete updateData._id;
+
+        // Also don't allow these to be changed accidentally
+        delete updateData.createdAt;
+
+        // Convert numeric fields
+        if (updateData.price !== undefined) {
+            updateData.price = Number(updateData.price);
+        }
+
+        if (updateData.discountPrice !== undefined) {
+            updateData.discountPrice = Number(updateData.discountPrice);
+        }
+
+        if (updateData.rating !== undefined) {
+            updateData.rating = Number(updateData.rating);
+        }
+
+        if (updateData.totalReviews !== undefined) {
+            updateData.totalReviews = Number(updateData.totalReviews);
+        }
+
+        if (updateData.stock !== undefined) {
+            updateData.stock = Number(updateData.stock);
+        }
+
+        if (updateData.sold !== undefined) {
+            updateData.sold = Number(updateData.sold);
+        }
+
+        if (updateData.pages !== undefined) {
+            updateData.pages = Number(updateData.pages);
+        }
+
+        // Update timestamp
+        updateData.updatedAt = new Date();
+
         const result = await db.collection("books").updateOne(
             {
                 _id: new ObjectId(id),
             },
             {
-                $set: {
-                    ...req.body,
-                    updatedAt: new Date(),
-                },
+                $set: updateData,
             }
         );
 
@@ -144,17 +184,19 @@ router.patch("/:id", async (req, res) => {
         res.status(200).json({
             success: true,
             message: "Book updated successfully",
+            modifiedCount: result.modifiedCount,
         });
+
     } catch (error) {
-        console.error("Update book error:", error);
+        console.error("❌ Update book error:", error);
 
         res.status(500).json({
             success: false,
             message: "Failed to update book",
+            error: error.message,
         });
     }
 });
-
 // =====================================
 // DELETE BOOK
 // DELETE /books/:id
@@ -163,6 +205,8 @@ router.patch("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
     try {
         const { id } = req.params;
+
+        console.log("DELETE BOOK ID:", id);
 
         if (!ObjectId.isValid(id)) {
             return res.status(400).json({
@@ -177,23 +221,27 @@ router.delete("/:id", async (req, res) => {
             _id: new ObjectId(id),
         });
 
+        console.log("DELETE RESULT:", result);
+
         if (result.deletedCount === 0) {
             return res.status(404).json({
                 success: false,
-                message: "Book not found",
+                message: "Book not found in database",
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "Book deleted successfully",
+            deletedId: id,
         });
     } catch (error) {
-        console.error("Delete book error:", error);
+        console.error("DELETE BOOK ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Failed to delete book",
+            error: error.message,
         });
     }
 });
