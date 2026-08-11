@@ -4,7 +4,52 @@ const { ObjectId } = require("mongodb");
 const { getDB } = require("../config/db");
 
 const router = express.Router();
+// =====================================
+// GET RELATED BOOKS
+// GET /books/related?category=Novel&exclude=BOOK_ID
+// =====================================
 
+router.get("/related", async (req, res) => {
+    try {
+        const { category, exclude } = req.query;
+
+        if (!category) {
+            return res.status(400).json({
+                success: false,
+                message: "Category is required",
+            });
+        }
+
+        const db = getDB();
+
+        const query = {
+            category: category,
+        };
+
+        // Exclude current book only if a valid ID is provided
+        if (exclude && ObjectId.isValid(exclude)) {
+            query._id = {
+                $ne: new ObjectId(exclude),
+            };
+        }
+
+        const books = await db
+            .collection("books")
+            .find(query)
+            .sort({ createdAt: -1 })
+            .limit(8)
+            .toArray();
+
+        res.status(200).json(books);
+    } catch (error) {
+        console.error("Get related books error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to get related books",
+        });
+    }
+});
 // =====================================
 // GET ALL BOOKS
 // GET /books
