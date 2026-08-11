@@ -6,13 +6,14 @@ const cookieParser = require("cookie-parser");
 
 const { connectDB, getDB } = require("./config/db");
 
+// ======================================
 // Routes
+// ======================================
 
 const bookRoutes = require("./routes/bookRoutes");
 const homeRoutes = require("./routes/homeRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const adminRoutes = require("./routes/adminRoutes");
-
 
 const app = express();
 
@@ -22,15 +23,6 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 // ======================================
 
-// app.use(
-//   cors({
-//     origin: [
-//       "http://localhost:5173",
-//       "https://dhawa-publication-client.vercel.app",
-//     ].filter(Boolean),
-//     credentials: true,
-//   })
-// );
 const allowedOrigins = [
   "http://localhost:5173",
   "https://dhawa-publication-client.vercel.app",
@@ -39,7 +31,8 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests without origin
+      // Allow requests without an Origin
+      // Example: Postman / server-to-server
       if (!origin) {
         return callback(null, true);
       }
@@ -48,11 +41,14 @@ app.use(
         return callback(null, true);
       }
 
+      console.log("❌ CORS blocked:", origin);
+
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
   })
 );
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -61,20 +57,22 @@ app.use(cookieParser());
 // ======================================
 
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
     message: "Dhawa Publication Server Running...",
   });
 });
 
 // ======================================
-// Start Server
+// Start Database + Register Routes
 // ======================================
 
 const startServer = async () => {
   try {
     // Connect MongoDB
     await connectDB();
+
+    console.log("✅ MongoDB Connected");
 
     // Get database
     const db = getDB();
@@ -100,14 +98,10 @@ const startServer = async () => {
     // Routes
     // ======================================
 
-
-
     app.use("/books", bookRoutes);
     app.use("/home", homeRoutes);
-
     app.use("/categories", categoryRoutes);
     app.use("/admin", adminRoutes);
-
 
     // ======================================
     // 404 Handler
@@ -120,18 +114,29 @@ const startServer = async () => {
       });
     });
 
+    console.log("✅ Routes registered");
+
     // ======================================
-    // Start Express
+    // Local Development
     // ======================================
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-    });
+    if (process.env.NODE_ENV !== "production") {
+      app.listen(PORT, () => {
+        console.log(
+          `🚀 Server running on http://localhost:${PORT}`
+        );
+      });
+    }
   } catch (error) {
     console.error("❌ Server startup failed:", error);
-    process.exit(1);
   }
 };
 
+// Start server/database
 startServer();
 
+// ======================================
+// Export Express App for Vercel
+// ======================================
+
+module.exports = app;
