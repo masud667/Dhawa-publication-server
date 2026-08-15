@@ -203,7 +203,6 @@ router.get("/women", async (req, res) => {
 // ======================================
 // GET /home/self-purification
 // ======================================
-
 router.get("/self-purification", async (req, res) => {
     try {
         const db = getDB();
@@ -214,20 +213,21 @@ router.get("/self-purification", async (req, res) => {
                 section: "আমল ও আত্মশুদ্ধির বই",
                 status: "published",
             })
+            .sort({ createdAt: -1 })
             .limit(10)
             .toArray();
 
         res.status(200).json(books);
     } catch (error) {
-        console.error("Self purification API error:", error);
+        console.error("❌ Self purification API error:", error);
 
         res.status(500).json({
             success: false,
             message: "Failed to get self purification books",
+            error: error.message,
         });
     }
 });
-
 // ======================================
 // GET /home/talim
 // ======================================
