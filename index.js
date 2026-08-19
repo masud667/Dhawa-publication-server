@@ -13,10 +13,6 @@ const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 
-// ======================================
-// PORT
-// ======================================
-
 const PORT = process.env.PORT || 5000;
 
 // ======================================
@@ -24,33 +20,68 @@ const PORT = process.env.PORT || 5000;
 // ======================================
 
 const allowedOrigins = [
-  "http://localhost:5173",
-  "https://dhawa-publication-client.vercel.app",
+    "http://localhost:5173",
+    "https://dhawa-publication-client.vercel.app",
 ];
 
 app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
+    cors({
+        origin: function (origin, callback) {
+            // Allow requests without origin
+            // such as Postman/server-to-server
+            if (!origin) {
+                return callback(null, true);
+            }
+
+            if (allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+
+            return callback(
+                new Error("Not allowed by CORS")
+            );
+        },
+        credentials: true,
+    })
 );
 
 // ======================================
-// Middleware
+// MIDDLEWARE
 // ======================================
 
 app.use(express.json());
 app.use(cookieParser());
 
 // ======================================
+// DATABASE MIDDLEWARE
+// ======================================
+
+// VERY IMPORTANT FOR VERCEL
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+
+        next();
+    } catch (error) {
+        console.error("❌ Database middleware error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Database connection failed",
+            error: error.message,
+        });
+    }
+});
+
+// ======================================
 // ROOT
 // ======================================
 
 app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Dhawa Publication Server Running...",
-  });
+    res.status(200).json({
+        success: true,
+        message: "Dhawa Publication Server Running...",
+    });
 });
 
 // ======================================
@@ -58,8 +89,11 @@ app.get("/", (req, res) => {
 // ======================================
 
 app.use("/books", bookRoutes);
+
 app.use("/home", homeRoutes);
+
 app.use("/categories", categoryRoutes);
+
 app.use("/admin", adminRoutes);
 
 // ======================================
@@ -67,35 +101,26 @@ app.use("/admin", adminRoutes);
 // ======================================
 
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-  });
+    res.status(404).json({
+        success: false,
+        message: `Route not found: ${req.method} ${req.originalUrl}`,
+    });
 });
 
 // ======================================
-// DATABASE
+// LOCAL SERVER
 // ======================================
 
-connectDB()
-  .then(() => {
-    console.log("✅ MongoDB Connected");
-
-    // Local only
-    if (process.env.NODE_ENV !== "production") {
-      app.listen(PORT, () => {
+if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, () => {
         console.log(
-          `🚀 Server running on http://localhost:${PORT}`
+            `🚀 Server running on Dhawa Publication`
         );
-      });
-    }
-  })
-  .catch((error) => {
-    console.error("❌ MongoDB connection failed:", error);
-  });
+    });
+}
 
 // ======================================
-// EXPORT FOR VERCEL
+// VERCEL
 // ======================================
 
 module.exports = app;

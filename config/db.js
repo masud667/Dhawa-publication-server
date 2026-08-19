@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient } = require("mongodb");
 
 const uri = `mongodb+srv://${encodeURIComponent(
     process.env.DB_USER
@@ -7,38 +7,49 @@ const uri = `mongodb+srv://${encodeURIComponent(
 )}@cluster0.cdz9cop.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 
-const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    },
-});
+if (!uri) {
+    throw new Error("❌ MONGODB URI is not defined");
+}
 
-let db;
+const client = new MongoClient(uri);
+
+let db = null;
+let connectionPromise = null;
 
 const connectDB = async () => {
-    try {
-        await client.connect();
+    // Already connected
+    if (db) {
+        return db;
+    }
 
-        await client.db("admin").command({
-            ping: 1,
+    // Connection already in progress
+    if (connectionPromise) {
+        return connectionPromise;
+    }
+
+    connectionPromise = client
+        .connect()
+        .then(() => {
+            console.log("✅ MongoDB connected");
+
+            db = client.db("dhawaPublication");
+
+            return db;
+        })
+        .catch((error) => {
+            connectionPromise = null;
+
+            console.error("❌ MongoDB connection failed:", error);
+
+            throw error;
         });
 
-        db = client.db("dhawaPublication");
-
-        console.log("✅ MongoDB Connected");
-
-        return db;
-    } catch (error) {
-        console.error("❌ MongoDB connection failed:", error);
-        throw error;
-    }
+    return connectionPromise;
 };
 
 const getDB = () => {
     if (!db) {
-        throw new Error("Database is not connected");
+        throw new Error("❌ Database is not connected");
     }
 
     return db;
