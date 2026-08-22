@@ -1,256 +1,276 @@
 const express = require("express");
+const { ObjectId } = require("mongodb");
+
 const { getDB } = require("../config/db");
 
 const router = express.Router();
 
-// ======================================
-// Helper
-// ======================================
+// =====================================================
+// GET ALL BOOKS
+// GET /books
+// =====================================================
 
-const getBooks = async (filter = {}) => {
-    const db = getDB();
-
-    return await db
-        .collection("books")
-        .find(filter)
-        .sort({ createdAt: -1 })
-        .limit(10)
-        .toArray();
-};
-
-// ======================================
-// GET /home/banner
-// ======================================
-
-router.get("/banner", async (req, res) => {
+router.get("/", async (req, res) => {
     try {
         const db = getDB();
 
-        const banners = await db
-            .collection("banners")
-            .find({
-                status: "published",
-            })
+        const books = await db
+            .collection("books")
+            .find({})
             .sort({ createdAt: -1 })
             .toArray();
 
-        res.status(200).json(banners);
+        res.status(200).json(books);
     } catch (error) {
-        console.error("❌ Banner API error:", error);
+        console.error("❌ Get books error:", error);
 
         res.status(500).json({
             success: false,
-            message: "Failed to get banners",
-            error: error.message,
+            message: "Failed to get books",
         });
     }
 });
 
-// ======================================
-// GET /home/recent-books
-// ======================================
 
-router.get("/recent-books", async (req, res) => {
+// =====================================================
+// GET SINGLE BOOK
+// GET /books/:id
+// =====================================================
+
+router.get("/:id", async (req, res) => {
     try {
-        const books = await getBooks({
-            recent: true,
-            status: "published",
+        const { id } = req.params;
+
+        // Validate MongoDB ObjectId
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid book ID",
+            });
+        }
+
+        const db = getDB();
+
+        const book = await db.collection("books").findOne({
+            _id: new ObjectId(id),
         });
+
+        if (!book) {
+            return res.status(404).json({
+                success: false,
+                message: "Book not found",
+            });
+        }
+
+        res.status(200).json(book);
+    } catch (error) {
+        console.error("❌ Get single book error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to get book",
+        });
+    }
+});
+
+
+// =====================================================
+// GET RELATED BOOKS
+// GET /books/related?category=Novel&exclude=BOOK_ID
+// =====================================================
+
+// IMPORTANT:
+// This route MUST come before /:id
+// Otherwise "related" can be treated as an ID.
+
+router.get("/related", async (req, res) => {
+    try {
+        const { category, exclude } = req.query;
+
+        if (!category) {
+            return res.status(400).json({
+                success: false,
+                message: "Category is required",
+            });
+        }
+
+        const db = getDB();
+
+        const query = {
+            category: category,
+        };
+
+        // Exclude current book
+        if (exclude) {
+            if (!ObjectId.isValid(exclude)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid exclude book ID",
+                });
+            }
+
+            query._id = {
+                $ne: new ObjectId(exclude),
+            };
+        }
+
+        const books = await db
+            .collection("books")
+            .find(query)
+            .sort({ createdAt: -1 })
+            .limit(10)
+            .toArray();
 
         res.status(200).json(books);
     } catch (error) {
-        console.error("❌ Recent books API error:", error);
+        console.error("❌ Related books error:", error);
 
         res.status(500).json({
             success: false,
-            message: "Failed to get recent books",
-            error: error.message,
+            message: "Failed to get related books",
         });
     }
 });
 
-// ======================================
-// GET /home/featured-books
-// ======================================
 
-router.get("/featured-books", async (req, res) => {
+// =====================================================
+// CREATE BOOK
+// POST /books
+// =====================================================
+
+router.post("/", async (req, res) => {
     try {
-        const books = await getBooks({
-            featured: true,
-            status: "published",
-        });
+        const db = getDB();
 
-        res.status(200).json(books);
+        const book = {
+            ...req.body,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+
+        const result = await db
+            .collection("books")
+            .insertOne(book);
+
+        res.status(201).json({
+            success: true,
+            message: "Book created successfully",
+            insertedId: result.insertedId,
+        });
     } catch (error) {
-        console.error("❌ Featured books API error:", error);
+        console.error("❌ Create book error:", error);
 
         res.status(500).json({
             success: false,
-            message: "Failed to get featured books",
-            error: error.message,
+            message: "Failed to create book",
         });
     }
 });
 
-// ======================================
-// GET /home/best-seller
-// ======================================
 
-router.get("/best-seller", async (req, res) => {
+// =====================================================
+// UPDATE BOOK
+// PATCH /books/:id
+// =====================================================
+
+router.patch("/:id", async (req, res) => {
     try {
-        const books = await getBooks({
-            bestSeller: true,
-            status: "published",
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid book ID",
+            });
+        }
+
+        const db = getDB();
+
+        // Don't allow _id to be modified
+        const { _id, ...updateData } = req.body;
+
+        const result = await db.collection("books").updateOne(
+            {
+                _id: new ObjectId(id),
+            },
+            {
+                $set: {
+                    ...updateData,
+                    updatedAt: new Date(),
+                },
+            }
+        );
+
+        if (result.matchedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Book not found",
+            });
+        }
+
+        // Return updated book
+        const updatedBook = await db.collection("books").findOne({
+            _id: new ObjectId(id),
         });
 
-        res.status(200).json(books);
+        res.status(200).json({
+            success: true,
+            message: "Book updated successfully",
+            book: updatedBook,
+        });
     } catch (error) {
-        console.error("❌ Best seller API error:", error);
+        console.error("❌ Update book error:", error);
 
         res.status(500).json({
             success: false,
-            message: "Failed to get best seller books",
-            error: error.message,
+            message: "Failed to update book",
         });
     }
 });
 
-// ======================================
-// GET /home/popular
-// ======================================
 
-router.get("/popular", async (req, res) => {
+// =====================================================
+// DELETE BOOK
+// DELETE /books/:id
+// =====================================================
+
+router.delete("/:id", async (req, res) => {
     try {
-        const books = await getBooks({
-            popular: true,
-            status: "published",
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid book ID",
+            });
+        }
+
+        const db = getDB();
+
+        const result = await db.collection("books").deleteOne({
+            _id: new ObjectId(id),
         });
 
-        res.status(200).json(books);
+        if (result.deletedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Book not found",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Book deleted successfully",
+        });
     } catch (error) {
-        console.error("❌ Popular books API error:", error);
+        console.error("❌ Delete book error:", error);
 
         res.status(500).json({
             success: false,
-            message: "Failed to get popular books",
-            error: error.message,
+            message: "Failed to delete book",
         });
     }
 });
 
-// ======================================
-// GET /home/muslim-life
-// ======================================
-
-router.get("/muslim-life", async (req, res) => {
-    try {
-        const books = await getBooks({
-            section: "মুসলিম জীবন রচিত",
-            status: "published",
-        });
-
-        res.status(200).json(books);
-    } catch (error) {
-        console.error("❌ Muslim life API error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to get Muslim life books",
-            error: error.message,
-        });
-    }
-});
-
-// ======================================
-// GET /home/women
-// ======================================
-
-router.get("/women", async (req, res) => {
-    try {
-        const books = await getBooks({
-            section: "নারীদের নির্বাচিত বই",
-            status: "published",
-        });
-
-        res.status(200).json(books);
-    } catch (error) {
-        console.error("❌ Women books API error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to get women books",
-            error: error.message,
-        });
-    }
-});
-
-// ======================================
-// GET /home/self-purification
-// ======================================
-
-router.get("/self-purification", async (req, res) => {
-    try {
-        const books = await getBooks({
-            section: "আমল ও আত্মশুদ্ধির বই",
-            status: "published",
-        });
-
-        res.status(200).json(books);
-    } catch (error) {
-        console.error("❌ Self purification API error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to get self purification books",
-            error: error.message,
-        });
-    }
-});
-
-// ======================================
-// GET /home/talim
-// ======================================
-
-router.get("/talim", async (req, res) => {
-    try {
-        const books = await getBooks({
-            section: "তালীমের বই",
-            status: "published",
-        });
-
-        res.status(200).json(books);
-    } catch (error) {
-        console.error("❌ Talim API error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to get Talim books",
-            error: error.message,
-        });
-    }
-});
-
-// ======================================
-// GET /home/children
-// ======================================
-
-router.get("/children", async (req, res) => {
-    try {
-        const books = await getBooks({
-            section: "ছোটদের প্রিয় বই",
-            status: "published",
-        });
-
-        res.status(200).json(books);
-    } catch (error) {
-        console.error("❌ Children books API error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to get children books",
-            error: error.message,
-        });
-    }
-});
 
 module.exports = router;
