@@ -1,6 +1,7 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getDB } = require("../config/db");
+const adminEmails = require("../config/adminConfig");
 
 const router = express.Router();
 
@@ -34,7 +35,56 @@ router.get("/", async (req, res) => {
 });
 
 // ======================================================
-// GET SINGLE USER
+// CHECK ADMIN STATUS BY EMAIL (USING EXTERNAL ADMIN LIST)
+// GET /users/admin/:email
+// ======================================================
+
+router.get("/admin/:email", async (req, res) => {
+    try {
+        const db = getDB();
+        const { email } = req.params;
+
+        if (!email) {
+            return res.status(400).json({
+                admin: false,
+                message: "Email parameter is required",
+            });
+        }
+
+        const cleanEmail = email.toLowerCase().trim();
+
+        // 1. Check against the imported adminEmails file
+        if (adminEmails.map(e => e.toLowerCase()).includes(cleanEmail)) {
+            return res.status(200).json({
+                success: true,
+                admin: true,
+                message: "Admin verified via adminConfig file",
+            });
+        }
+
+        // 2. Fallback check: Verify role in MongoDB database
+        const user = await db.collection("users").findOne({
+            email: cleanEmail,
+        });
+
+        const isAdmin = user?.role === "admin";
+
+        return res.status(200).json({
+            success: true,
+            admin: isAdmin,
+        });
+    } catch (error) {
+        console.error("❌ Check admin error:", error);
+
+        return res.status(500).json({
+            admin: false,
+            message: "Failed to verify admin status",
+        });
+    }
+});
+
+// ======================================================
+// GET SINGLE USER BY ID
 // GET /users/:id
 // ======================================================
 
@@ -86,7 +136,7 @@ router.get("/email/:email", async (req, res) => {
         const { email } = req.params;
 
         const user = await db.collection("users").findOne({
-            email: email,
+            email: email.toLowerCase().trim(),
         });
 
         if (!user) {
@@ -110,6 +160,7 @@ router.get("/email/:email", async (req, res) => {
     }
 });
 
+
 // ======================================================
 // CREATE USER
 // POST /users
@@ -128,9 +179,11 @@ router.post("/", async (req, res) => {
             });
         }
 
+        const cleanEmail = email.toLowerCase().trim();
+
         // Check existing user
         const existingUser = await db.collection("users").findOne({
-            email: email,
+            email: cleanEmail,
         });
 
         if (existingUser) {
@@ -143,11 +196,9 @@ router.post("/", async (req, res) => {
 
         const newUser = {
             name: name || "",
-            email,
+            email: cleanEmail,
             photo: photo || "",
-
-            role: "customer",
-
+            role: "customer", // Default role
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -193,7 +244,7 @@ router.patch("/:id", async (req, res) => {
             updatedAt: new Date(),
         };
 
-        // Never update MongoDB _id
+        // Never allow updating MongoDB _id
         delete updateData._id;
 
         const result = await db.collection("users").updateOne(
@@ -251,10 +302,7 @@ router.patch("/:id/role", async (req, res) => {
             });
         }
 
-        const allowedRoles = [
-            "customer",
-            "admin",
-        ];
+        const allowedRoles = ["customer", "admin"];
 
         if (!allowedRoles.includes(role)) {
             return res.status(400).json({
