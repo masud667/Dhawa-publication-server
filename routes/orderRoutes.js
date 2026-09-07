@@ -1,15 +1,15 @@
 const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getDB } = require("../config/db");
+const { protect, adminOnly, validateOrder } = require("../middleware/auth");
 
 const router = express.Router();
 
 // ======================================================
-// GET ALL ORDERS
+// GET ALL ORDERS (Admin Only)
 // GET /orders
 // ======================================================
-
-router.get("/", async (req, res) => {
+router.get("/", protect, adminOnly, async (req, res) => {
     try {
         const db = getDB();
 
@@ -34,11 +34,78 @@ router.get("/", async (req, res) => {
 });
 
 // ======================================================
-// GET SINGLE ORDER
+// GET RECENT ORDERS (Admin Only)
+// GET /orders/recent
+// Note: Must be defined BEFORE /orders/:id to prevent URL collision
+// ======================================================
+router.get("/recent", protect, adminOnly, async (req, res) => {
+    try {
+        const db = getDB();
+
+        const recentOrders = await db
+            .collection("orders")
+            .find({})
+            .sort({ createdAt: -1 })
+            .limit(5)
+            .toArray();
+
+        res.status(200).json({
+            success: true,
+            orders: recentOrders,
+        });
+    } catch (error) {
+        console.error("❌ Get recent orders error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch recent orders",
+        });
+    }
+});
+
+// ======================================================
+// GET ORDERS BY USER EMAIL
+// GET /orders/user/:email
+// Note: Must be defined BEFORE /orders/:id
+// ======================================================
+router.get("/user/:email", protect, async (req, res) => {
+    try {
+        const db = getDB();
+        const { email } = req.params;
+
+        // Ensure users can only query their own orders unless they are an admin
+        if (req.user.role !== "admin" && req.user.email !== email) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied: Cannot fetch orders for other users",
+            });
+        }
+
+        const orders = await db
+            .collection("orders")
+            .find({ email })
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        res.status(200).json({
+            success: true,
+            orders,
+        });
+    } catch (error) {
+        console.error("❌ Get user orders error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to get user orders",
+        });
+    }
+});
+
+// ======================================================
+// GET SINGLE ORDER BY ID
 // GET /orders/:id
 // ======================================================
-
-router.get("/:id", async (req, res) => {
+router.get("/:id", protect, async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -61,6 +128,14 @@ router.get("/:id", async (req, res) => {
             });
         }
 
+        // Restrict view if order doesn't belong to logged-in user and not admin
+        if (req.user.role !== "admin" && req.user.email !== order.email) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied: Not authorized to view this order",
+            });
+        }
+
         res.status(200).json({
             success: true,
             order,
@@ -76,75 +151,22 @@ router.get("/:id", async (req, res) => {
 });
 
 // ======================================================
-// GET ORDERS BY EMAIL
-// GET /orders/user/:email
-// ======================================================
-
-router.get("/user/:email", async (req, res) => {
-    try {
-        const db = getDB();
-        const { email } = req.params;
-
-        const orders = await db
-            .collection("orders")
-            .find({
-                email: email,
-            })
-            .sort({ createdAt: -1 })
-            .toArray();
-
-        res.status(200).json({
-            success: true,
-            orders,
-        });
-    } catch (error) {
-        console.error("❌ Get user orders error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to get user orders",
-        });
-    }
-});
-
-// ======================================================
 // CREATE ORDER
 // POST /orders
 // ======================================================
-
-router.post("/", async (req, res) => {
+router.post("/", validateOrder, async (req, res) => {
     try {
         const db = getDB();
-
         const orderData = req.body;
-
-        // Basic validation
-        if (!orderData.email) {
-            return res.status(400).json({
-                success: false,
-                message: "Customer email is required",
-            });
-        }
-
-        if (!orderData.items || !Array.isArray(orderData.items)) {
-            return res.status(400).json({
-                success: false,
-                message: "Order items are required",
-            });
-        }
 
         const newOrder = {
             ...orderData,
-
             status: orderData.status || "pending",
-
             createdAt: new Date(),
             updatedAt: new Date(),
         };
 
-        const result = await db
-            .collection("orders")
-            .insertOne(newOrder);
+        const result = await db.collection("orders").insertOne(newOrder);
 
         res.status(201).json({
             success: true,
@@ -162,11 +184,10 @@ router.post("/", async (req, res) => {
 });
 
 // ======================================================
-// UPDATE ORDER
+// UPDATE ENTIRE ORDER (Admin Only)
 // PATCH /orders/:id
 // ======================================================
-
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", protect, adminOnly, async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -183,16 +204,11 @@ router.patch("/:id", async (req, res) => {
             updatedAt: new Date(),
         };
 
-        // Prevent changing MongoDB _id
         delete updateData._id;
 
         const result = await db.collection("orders").updateOne(
-            {
-                _id: new ObjectId(id),
-            },
-            {
-                $set: updateData,
-            }
+            { _id: new ObjectId(id) },
+            { $set: updateData }
         );
 
         if (result.matchedCount === 0) {
@@ -217,11 +233,10 @@ router.patch("/:id", async (req, res) => {
 });
 
 // ======================================================
-// UPDATE ONLY ORDER STATUS
+// UPDATE ORDER STATUS ONLY (Admin Only)
 // PATCH /orders/:id/status
 // ======================================================
-
-router.patch("/:id/status", async (req, res) => {
+router.patch("/:id/status", protect, adminOnly, async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -242,9 +257,7 @@ router.patch("/:id/status", async (req, res) => {
         }
 
         const result = await db.collection("orders").updateOne(
-            {
-                _id: new ObjectId(id),
-            },
+            { _id: new ObjectId(id) },
             {
                 $set: {
                     status,
@@ -275,11 +288,10 @@ router.patch("/:id/status", async (req, res) => {
 });
 
 // ======================================================
-// DELETE ORDER
+// DELETE ORDER (Admin Only)
 // DELETE /orders/:id
 // ======================================================
-
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", protect, adminOnly, async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;

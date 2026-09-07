@@ -74,44 +74,49 @@ router.get("/:id", async (req, res) => {
 });
 
 
+
+
 // =====================================================
-// GET RELATED BOOKS
+// 2. GET RELATED BOOKS
 // GET /books/related?category=Novel&exclude=BOOK_ID
+// IMPORTANT: MUST be placed BEFORE /:id
 // =====================================================
 
-// IMPORTANT:
-// This route MUST come before /:id
-// Otherwise "related" can be treated as an ID.
 
 router.get("/related", async (req, res) => {
     try {
         const { category, exclude } = req.query;
 
-        if (!category) {
+        // 1. Category validation
+        if (!category || category.trim() === "" || category === "undefined") {
             return res.status(400).json({
                 success: false,
-                message: "Category is required",
+                message: "A valid category query parameter is required",
             });
         }
 
         const db = getDB();
 
+        // Safe Regex search for case-insensitive exact category matching
+        const cleanCategory = category.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const query = {
-            category: category,
+            category: { $regex: new RegExp(`^${cleanCategory}$`, "i") },
         };
 
-        // Exclude current book
-        if (exclude) {
-            if (!ObjectId.isValid(exclude)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid exclude book ID",
-                });
-            }
+        // 2. Strict ID exclusion handling
+        if (exclude && exclude !== "undefined" && exclude !== "null") {
+            // Regex check for exact 24-character hex string (Standard MongoDB ObjectId format)
+            const is24Hex = /^[0-9a-fA-F]{24}$/.test(exclude);
 
-            query._id = {
-                $ne: new ObjectId(exclude),
-            };
+            if (is24Hex) {
+                // Safely exclude both ObjectId type and String type (in case schema varies)
+                query._id = {
+                    $nin: [new ObjectId(exclude), exclude]
+                };
+            } else {
+                // If it's a custom string ID, exclude plain string directly
+                query._id = { $ne: exclude };
+            }
         }
 
         const books = await db
@@ -121,16 +126,19 @@ router.get("/related", async (req, res) => {
             .limit(10)
             .toArray();
 
-        res.status(200).json(books);
+        return res.status(200).json(books);
     } catch (error) {
         console.error("❌ Related books error:", error);
-
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: "Failed to get related books",
+            error: error.message,
         });
     }
 });
+
+
+
 
 
 // =====================================================
