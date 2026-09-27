@@ -28,6 +28,7 @@ const allowedOrigins = [
     "https://dawahpublication.com",
     "https://www.dawahpublication.com"
 ];
+
 app.use(
     cors({
         origin: function (origin, callback) {

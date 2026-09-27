@@ -153,11 +153,19 @@ router.get("/:id", protect, async (req, res) => {
 // ======================================================
 // CREATE ORDER
 // POST /orders
-// ======================================================
-router.post("/", validateOrder, async (req, res) => {
+
+// routes/orderRoutes.js এর POST /orders অংশ
+router.post("/", async (req, res) => {
     try {
         const db = getDB();
         const orderData = req.body;
+
+        if (!orderData.email || !orderData.orderItems || orderData.orderItems.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "প্রয়োজনীয় সব তথ্য প্রদান করা হয়নি",
+            });
+        }
 
         const newOrder = {
             ...orderData,
@@ -182,7 +190,6 @@ router.post("/", validateOrder, async (req, res) => {
         });
     }
 });
-
 // ======================================================
 // UPDATE ENTIRE ORDER (Admin Only)
 // PATCH /orders/:id
