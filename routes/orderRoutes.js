@@ -1,15 +1,15 @@
+// routes/orderRoutes.js
 const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getDB } = require("../config/db");
-const { protect, adminOnly, validateOrder } = require("../middleware/auth");
 
 const router = express.Router();
 
 // ======================================================
-// GET ALL ORDERS (Admin Only)
+// GET ALL ORDERS
 // GET /orders
 // ======================================================
-router.get("/", protect, adminOnly, async (req, res) => {
+router.get("/", async (req, res) => {
     try {
         const db = getDB();
 
@@ -25,7 +25,6 @@ router.get("/", protect, adminOnly, async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Get orders error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to get orders",
@@ -34,11 +33,10 @@ router.get("/", protect, adminOnly, async (req, res) => {
 });
 
 // ======================================================
-// GET RECENT ORDERS (Admin Only)
+// GET RECENT ORDERS
 // GET /orders/recent
-// Note: Must be defined BEFORE /orders/:id to prevent URL collision
 // ======================================================
-router.get("/recent", protect, adminOnly, async (req, res) => {
+router.get("/recent", async (req, res) => {
     try {
         const db = getDB();
 
@@ -55,7 +53,6 @@ router.get("/recent", protect, adminOnly, async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Get recent orders error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to fetch recent orders",
@@ -66,20 +63,11 @@ router.get("/recent", protect, adminOnly, async (req, res) => {
 // ======================================================
 // GET ORDERS BY USER EMAIL
 // GET /orders/user/:email
-// Note: Must be defined BEFORE /orders/:id
 // ======================================================
-router.get("/user/:email", protect, async (req, res) => {
+router.get("/user/:email", async (req, res) => {
     try {
         const db = getDB();
         const { email } = req.params;
-
-        // Ensure users can only query their own orders unless they are an admin
-        if (req.user.role !== "admin" && req.user.email !== email) {
-            return res.status(403).json({
-                success: false,
-                message: "Access denied: Cannot fetch orders for other users",
-            });
-        }
 
         const orders = await db
             .collection("orders")
@@ -93,7 +81,6 @@ router.get("/user/:email", protect, async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Get user orders error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to get user orders",
@@ -105,7 +92,7 @@ router.get("/user/:email", protect, async (req, res) => {
 // GET SINGLE ORDER BY ID
 // GET /orders/:id
 // ======================================================
-router.get("/:id", protect, async (req, res) => {
+router.get("/:id", async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -128,21 +115,12 @@ router.get("/:id", protect, async (req, res) => {
             });
         }
 
-        // Restrict view if order doesn't belong to logged-in user and not admin
-        if (req.user.role !== "admin" && req.user.email !== order.email) {
-            return res.status(403).json({
-                success: false,
-                message: "Access denied: Not authorized to view this order",
-            });
-        }
-
         res.status(200).json({
             success: true,
             order,
         });
     } catch (error) {
         console.error("❌ Get single order error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to get order",
@@ -153,8 +131,7 @@ router.get("/:id", protect, async (req, res) => {
 // ======================================================
 // CREATE ORDER
 // POST /orders
-
-// routes/orderRoutes.js এর POST /orders অংশ
+// ======================================================
 router.post("/", async (req, res) => {
     try {
         const db = getDB();
@@ -163,7 +140,7 @@ router.post("/", async (req, res) => {
         if (!orderData.email || !orderData.orderItems || orderData.orderItems.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: "প্রয়োজনীয় সব তথ্য প্রদান করা হয়নি",
+                message: "প্রয়োজনীয় সব তথ্য প্রদান করা হয়নি",
             });
         }
 
@@ -183,18 +160,18 @@ router.post("/", async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Create order error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to create order",
         });
     }
 });
+
 // ======================================================
-// UPDATE ENTIRE ORDER (Admin Only)
+// UPDATE ENTIRE ORDER
 // PATCH /orders/:id
 // ======================================================
-router.patch("/:id", protect, adminOnly, async (req, res) => {
+router.patch("/:id", async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -231,7 +208,6 @@ router.patch("/:id", protect, adminOnly, async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Update order error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to update order",
@@ -240,10 +216,10 @@ router.patch("/:id", protect, adminOnly, async (req, res) => {
 });
 
 // ======================================================
-// UPDATE ORDER STATUS ONLY (Admin Only)
+// UPDATE ORDER STATUS ONLY
 // PATCH /orders/:id/status
 // ======================================================
-router.patch("/:id/status", protect, adminOnly, async (req, res) => {
+router.patch("/:id/status", async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -286,7 +262,6 @@ router.patch("/:id/status", protect, adminOnly, async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Update order status error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to update order status",
@@ -295,10 +270,10 @@ router.patch("/:id/status", protect, adminOnly, async (req, res) => {
 });
 
 // ======================================================
-// DELETE ORDER (Admin Only)
+// DELETE ORDER
 // DELETE /orders/:id
 // ======================================================
-router.delete("/:id", protect, adminOnly, async (req, res) => {
+router.delete("/:id", async (req, res) => {
     try {
         const db = getDB();
         const { id } = req.params;
@@ -327,7 +302,6 @@ router.delete("/:id", protect, adminOnly, async (req, res) => {
         });
     } catch (error) {
         console.error("❌ Delete order error:", error);
-
         res.status(500).json({
             success: false,
             message: "Failed to delete order",
