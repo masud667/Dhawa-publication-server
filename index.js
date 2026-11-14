@@ -13,6 +13,7 @@ const categoryRoutes = require("./routes/categoryRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const userRoutes = require("./routes/userRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const bannerRoutes = require("./routes/bannerRoutes");
 
 const app = express();
 
@@ -149,6 +150,8 @@ app.use("/home", homeRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/users", userRoutes);
 app.use("/orders", orderRoutes);
+app.use("/banners", bannerRoutes);
+
 // Protected Admin Routes (Pass verifyJWT middleware or include in adminRoutes)
 app.use("/admin", verifyJWT, adminRoutes);
 
